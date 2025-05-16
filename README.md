@@ -68,3 +68,16 @@ for sample in dataset['train']:
     print(sample)
     break
 ```
+
+### Run evaluation on sample data
+
+Start by downloading the dataset to your directory
+
+1. QnA downstream task
+```python
+python3 QA_evaluation_pipeline.py
+```
+2. Anomaly tasks (Choose the function you are interested in!)
+```python
+python3 anomaly_tasks_evaluation.py
+```
