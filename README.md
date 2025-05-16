@@ -1,6 +1,4 @@
----
-license: mit
----
+
 # 📡 TelecomTS: A Telecom Time-Series Dataset
 
 ---
