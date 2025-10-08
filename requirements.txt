@@ -1,0 +1,7 @@
+torch==2.8.0
+pyyaml==6.0.2
+numpy==2.3.3
+scikit-learn==1.7.2
+reformer_pytorch==1.4.4
+tqdm==4.67.1
+datasets==4.1.1

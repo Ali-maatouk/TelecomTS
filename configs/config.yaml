@@ -1,0 +1,100 @@
+task_type: 'anomaly detection' # 'anomaly detection' | 'root-cause analysis' | 'anomaly duration' | 'forecasting'
+
+encoder_type: 'TimesNet'       # 'TimesNet' | 'Autoformer' | 'NonStationary_Transformer' | 'FEDformer' | 'Informer'
+
+seed: 42
+split_ratio: 0.2               # test/train split ratio
+
+train:
+  batch_size: 32
+  epochs: 5
+  optim:
+    lr: 0.001
+    weight_decay: 0.0001
+    betas: [0.9, 0.999]
+
+TimesNet_model:
+  seq_len: 128
+  pred_len: 0
+  top_k: 3
+  enc_in: 18
+  d_model: 32
+  d_ff: 64
+  num_kernels: 4
+  embed: "fixed"           # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+  freq: "0.1s"
+  dropout: 0.3
+  e_layers: 2
+
+Informer_model:
+    d_model:    32
+    n_heads:    8
+    e_layers:   3
+    d_ff:       64
+    dropout:    0.3
+    factor:     1
+    activation: "gelu"
+    seq_len:    128       # T
+    label_len:  0         # not used for recon
+    pred_len:   0         # recon only
+    enc_in:     18        # C (input channels)
+    dec_in:     18        # for decoder embedding
+    c_out:      18        # must match enc_in for recon
+    embed:      "fixed"   # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    freq:       "h"
+    moving_avg: 25
+
+FEDformer_model:
+    d_model: 32
+    n_heads: 8
+    e_layers: 3
+    d_ff: 64
+    dropout: 0.3
+    activation: 'gelu'
+    embed: 'timeF'         # uses calendar/time-of-day features; set `freq` appropriately. Alternatives: "learned", "timeF"
+    freq: 's'
+    seq_len: 128
+    label_len: 0
+    pred_len: 0      
+    enc_in: 18             # input channels C
+    dec_in: 18             # unused here
+    c_out: 18              # must equal enc_in for reconstruction
+    version: 'fourier'     # 'fourier' or 'wavelets'
+    mode_select: 'random'  # 'random' or 'low'
+    modes: 32              # number of modes to select
+    moving_avg: 25
+    
+Autoformer_model:
+    d_model:    32
+    n_heads:    8
+    e_layers:   3
+    d_ff:       64
+    dropout:    0.3
+    factor:     1
+    activation: "gelu"
+    seq_len:    128       # T
+    pred_len:   0
+    label_len:  0
+    enc_in:     18        # C (input channels)
+    c_out:      18        # must match enc_in for recon
+    embed:      "fixed"   # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    freq:       "s"
+    moving_avg: 25
+
+NonStationary_Transformer_model:
+    d_model:   32
+    n_heads:   8
+    e_layers:  3
+    d_ff:      64
+    dropout:   0.3
+    factor:    1
+    activation: "gelu"
+    seq_len:   128        # T
+    label_len: 0          # not used here
+    pred_len:  0          # pure reconstruction; keep 0
+    enc_in:    18         # C_in == c_out for reconstruction
+    c_out:     18
+    embed:     "fixed"    # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    freq:      "h"
+    p_hidden_dims:   [128, 128]
+    p_hidden_layers: 2
