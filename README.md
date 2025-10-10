@@ -7,7 +7,7 @@
   <span style="display:inline-flex; align-items:center; gap:6px; vertical-align:middle;">
     <!-- <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2OXMnc5dzJNAKeOLGQDnYURnKrRPELeQOcw&s"
          alt="arXiv" height="25"; style="vertical-align:bottom;"/> -->
-  📄 <a href="#">arXiv Paper </a>
+  📄 <a href="https://arxiv.org/abs/2510.06063">arXiv Paper </a>
   </span>
 </p>
 
