@@ -111,7 +111,7 @@ The benchmarking pipeline in this repo fetches the data automatically — no man
 ```bash
 # 1) Clone
 git clone https://github.com/Ali-maatouk/TelecomTS.git
-cd TelecomTS_Benchmark
+cd TelecomTS
 
 # 2) Create & activate a virtual environment
 python3.11 -m venv .venv
