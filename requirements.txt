@@ -1,7 +1,11 @@
-torch==2.8.0
-pyyaml==6.0.2
-numpy==2.3.3
-scikit-learn==1.7.2
-reformer_pytorch==1.4.4
-tqdm==4.67.1
-datasets==4.1.1
+torch>=2.9.1
+pyyaml>=6.0
+numpy>=1.26
+scikit-learn>=1.5
+reformer_pytorch>=1.4
+tqdm>=4.66
+datasets>=2.17
+chronos-forecasting>=2.2.2
+mantis-tsfm>=1.0.0
+transformers>=4.40.0
+toto-ts @ git+https://github.com/varvarigos/toto.git

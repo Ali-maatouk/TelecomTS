@@ -1,29 +1,25 @@
 import numpy as np
 
-protocol_map = {"TCP": 0, "UDP": 1, "None": 2}
+protocol_map = {"TCP": 0, "UDP": 1, None: 2, "None": 2}
 
 
-def _anomaly_type_2_id(anomaly_type: str) -> int:
-    """
-    Map anomaly type strings to integer IDs.
-    """
+def anomaly_type_2_id(anomaly_type):
     mapping = {
-        "Jamming": 0,
-        "Antenna Failure": 1,
-        "Co-Channel Interference (Mild)": 2,
-        "Co-Channel Interference (Severe)": 3,
-        "Faulty RF Filters (Temporal)": 4,
-        "Doppler Shift (Severe)": 5,
-        "Faulty Handover Algorithm (Too Frequent)": 6,
-        "Buffer Overflow (Gradual Buildup)": 7,
-        "Resource Allocation Bugs": 8,
-        "High Network Congestion (Gradual Buildup)": 9,
-        "High Network Congestion (Sudden Spike)": 10,
+        "Antenna Failure": 0,
+        "Co-Channel Interference (Mild)": 1,
+        "Co-Channel Interference (Severe)": 2,
+        "Faulty RF Filters (Temporal)": 3,
+        "Doppler Shift (Severe)": 4,
+        "Faulty Handover Algorithm (Too Frequent)": 5,
+        "Buffer Overflow (Gradual Buildup)": 6,
+        "Resource Allocation Bugs": 7,
+        "High Network Congestion (Gradual Buildup)": 8,
+        "High Network Congestion (Sudden Spike)": 9,
     }
     return mapping[anomaly_type]
 
 
-def _make_sliding_windows(X_np: np.ndarray, window_size: int = 8) -> (np.ndarray, np.ndarray):
+def make_sliding_windows(X_np, window_size=8):
     """
     X_np: (N, C, T)
     Returns:
@@ -46,117 +42,118 @@ def _make_sliding_windows(X_np: np.ndarray, window_size: int = 8) -> (np.ndarray
     return X_out.astype(np.float32), y_out.astype(np.float32)
 
 
-def _balance_data(X: np.ndarray, y: np.ndarray) -> (tuple):
-    """
-    Downsample to balance classes in y
-    """
-    # Find the indices of each class
-    class_indices = {}
-    for idx, label in enumerate(y):
-        if label not in class_indices:
-            class_indices[label] = []
-        class_indices[label].append(idx)
-
-    # Find the minimum class count
-    min_count = min(len(indices) for indices in class_indices.values())
-
-    # Reduce each class to the minimum count
-    balanced_indices = []
-    for indices in class_indices.values():
-        balanced_indices.extend(indices[:min_count])
-
-    # Select only the balanced indices
-    X_balanced = X[balanced_indices]
-    y_balanced = y[balanced_indices]
-
-    return X_balanced, y_balanced
-
-
-def _kpis_to_seq(item, protocol_map):
-    """KPIs dict -> (T, C) array with protocols encoded."""
-    rows = []
-    # preserve insertion order of keys (JSON -> dict keeps it)
-    for key in list(item["KPIs"].keys()):
-        vals = item["KPIs"][key]
-        if key in ["UL_Protocol", "DL_Protocol"]:
-            vals = [protocol_map.get(v, 2) for v in vals]
-        rows.append(vals)
-    return np.asarray(rows, dtype=np.float32).T  # (T, C)
-
-
-def preprocess(data, task, window_size=8):
-    """
-    task ∈ {'anomaly detection', 'root-cause analysis', 'anomaly duration', 'forecasting'}
-    Returns:
-      - detection / root-cause: (X: (N,C,T), y: (N,))
-      - duration:               (X: (N,C,T), y: (N,T))
-      - forecasting:            (X: (B,C,window), y: (B,C)) after sliding windows
-    """
-    if task == "anomaly detection":
-        X_list = [_kpis_to_seq(item, protocol_map) for item in data]
-        y_list = [1 if item["anomalies"]["exists"] else 0 for item in data]
-
-        X = np.asarray(X_list, dtype=np.float32).transpose(0, 2, 1)  # (N,C,T)
-        y = np.asarray(y_list, dtype=np.int64)
-
-        # Balance the dataset (uses your existing helper)
-        X, y = _balance_data(X, y)
-        return X, y
-
-    elif task == "root-cause analysis":
-        X_list, y_list = [], []
+def preprocess(data, type, window_size=8):
+    if type == "anomaly detection":
+        X_list = []
         for item in data:
-            if not item["anomalies"]["exists"]:
-                continue
-            X_list.append(_kpis_to_seq(item, protocol_map))
-            y_list.append(_anomaly_type_2_id(item["anomalies"]["type"]))
-
-        X = np.asarray(X_list, dtype=np.float32).transpose(0, 2, 1)  # (N,C,T)
-        y = np.asarray(y_list, dtype=np.int64)
-
-        # Per-channel z-score normalization
-        X = (X - X.mean(axis=(0, 2), keepdims=True)) / (X.std(axis=(0, 2), keepdims=True) + 1e-6)
-
-        return X, y
-
-    elif task == "anomaly duration":
-        X_list, y_list = [], []
-        for item in data:
-            if not item["anomalies"]["exists"]:
-                continue
-            seq = _kpis_to_seq(item, protocol_map)  # (T,C)
+            seq, row = [], []
+            for key, values in item["KPIs"].items():
+                if key in ["UL_Protocol", "DL_Protocol"]:
+                    encoded_values = [protocol_map.get(v, 2) for v in values]
+                    row.append(encoded_values)
+                else:
+                    row.append(values)
+            seq = np.array(row).T  # (seq_len, n_channels)
             X_list.append(seq)
 
-            T = seq.shape[0]
-            s = item["anomalies"]["anomaly_duration"]["start"]
-            e = item["anomalies"]["anomaly_duration"]["end"]
-            arr = np.zeros(T, dtype=np.float32)
-            arr[s:e+1] = 1.0
-            y_list.append(arr)
+        y_list = [1 if item["anomalies"]["exists"] else 0 for item in data]
 
-        X = np.asarray(X_list, dtype=np.float32).transpose(0, 2, 1)    # (N,C,T)
-        y = np.asarray(y_list, dtype=np.float32)                       # (N,T)
-        return X, y
+        X_np = np.array(X_list, dtype=np.float32)  # (n_samples, seq_len, n_channels)
+        X_np = np.transpose(X_np, (0, 2, 1))  # (n_samples, n_channels, seq_len)
+        y_np = np.array(y_list, dtype=np.int64)  # (n_samples,)
+        return X_np, y_np
 
-    elif task == "forecasting":
-        # only consider anomalous sequences
-        X_list = [
-            _kpis_to_seq(item, protocol_map)
-            for item in data
-            if item["anomalies"]["exists"]
-        ]
-        X = np.asarray(X_list, dtype=np.float32).transpose(0, 2, 1)    # (N,C,T)
+    elif type == "root-cause analysis":
+        X_list, y_list = [], []
+        for item in data:
+            if (
+                not item["anomalies"]["exists"]
+                or item["anomalies"]["type"] == "Jamming"
+            ):
+                continue  # skip non-anomalous samples
+            seq, row = [], []
+            for key, values in item["KPIs"].items():
+                if key in ["UL_Protocol", "DL_Protocol"]:
+                    encoded_values = [protocol_map.get(v, 2) for v in values]
+                    row.append(encoded_values)
+                else:
+                    row.append(values)
+            seq = np.array(row).T  # (seq_len, n_channels)
+            X_list.append(seq)
+            y_list.append(anomaly_type_2_id(item["anomalies"]["type"]))
 
-        Xw, yw = _make_sliding_windows(X, window_size=window_size)     # (B,C,w), (B,C)
+        X_np = np.array(X_list, dtype=np.float32)  # (n_samples, seq_len, n_channels)
+        X_np = np.transpose(X_np, (0, 2, 1))  # (n_samples, n_channels, seq_len)
+        y_np = np.array(y_list, dtype=np.int64)  # (n_samples,)
 
-        # Per-channel z-score (match your original)
-        mu = Xw.mean(axis=(0, 2), keepdims=True)
-        sd = Xw.std(axis=(0, 2), keepdims=True)
-        sd[sd == 0] = 1.0
-        Xw = (Xw - mu) / sd
-        yw = (yw - mu[:, :, 0]) / sd[:, :, 0]
+        # Z-score normalization per channel
+        means = X_np.mean(axis=(0, 2), keepdims=True)  # (1, C, 1)
+        stds = X_np.std(axis=(0, 2), keepdims=True)  # (1, C, 1)
+        stds[stds == 0] = 1.0
+        X_np = (X_np - means) / stds
 
-        return Xw.astype(np.float32), yw.astype(np.float32)
+        return X_np, y_np
+
+    elif type == "anomaly duration":
+        X_list, y_list = [], []
+        for item in data:
+            if (
+                not item["anomalies"]["exists"]
+                or item["anomalies"]["type"] == "Jamming"
+            ):
+                continue  # skip non-anomalous samples
+            seq, row = [], []
+            for key, values in item["KPIs"].items():
+                if key in ["UL_Protocol", "DL_Protocol"]:
+                    encoded_values = [protocol_map.get(v, 2) for v in values]
+                    row.append(encoded_values)
+                else:
+                    row.append(values)
+            seq = np.array(row).T  # (seq_len, n_channels)
+            X_list.append(seq)
+
+            anomaly_start_idx = item["anomalies"]["anomaly_duration"]["start"]
+            anomaly_end_idx = item["anomalies"]["anomaly_duration"]["end"]
+            anomaly_array = np.zeros(seq.shape[0], dtype=np.float32)
+            anomaly_array[anomaly_start_idx : anomaly_end_idx + 1] = 1
+            y_list.append(anomaly_array)
+
+        X_np = np.array(X_list, dtype=np.float32)  # (n_samples, seq_len, n_channels)
+        X_np = np.transpose(X_np, (0, 2, 1))  # (n_samples, n_channels, seq_len)
+        y_np = np.array(y_list, dtype=np.float32)  # (n_samples, seq_len)
+        return X_np, y_np
+
+    elif type == "forecasting":
+        X_list = []
+        for item in data:
+            if (
+                not item["anomalies"]["exists"]
+                or item["anomalies"]["type"] == "Jamming"
+            ):
+                continue  # skip non-anomalous samples
+            seq, row = [], []
+            for key, values in item["KPIs"].items():
+                if key in ["UL_Protocol", "DL_Protocol"]:
+                    encoded_values = [protocol_map.get(v, 2) for v in values]
+                    row.append(encoded_values)
+                else:
+                    row.append(values)
+            seq = np.array(row).T  # (seq_len, n_channels)
+            X_list.append(seq)
+
+        X_np = np.array(X_list, dtype=np.float32)  # (n_samples, seq_len, n_channels)
+        X_np = np.transpose(X_np, (0, 2, 1))  # (n_samples, n_channels, seq_len)
+
+        X_out, y_out = make_sliding_windows(X_np, window_size=window_size)
+
+        # Z-score normalization per channel
+        means = X_out.mean(axis=(0, 2), keepdims=True)  # (1, C, 1)
+        stds = X_out.std(axis=(0, 2), keepdims=True)  # (1, C, 1)
+        stds[stds == 0] = 1.0
+        X_out = (X_out - means) / stds
+        y_out = (y_out - means[:, :, 0]) / stds[:, :, 0]
+
+        return X_out.astype(np.float32), y_out.astype(np.float32)
 
     else:
-        raise ValueError(f"Unknown task: {task}")
+        raise ValueError(f"Unknown task type: {type}")

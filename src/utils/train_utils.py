@@ -5,16 +5,10 @@ import torch.nn as nn
 import torch.optim as optim
 from types import SimpleNamespace
 from torch.utils.data import DataLoader
-from sklearn.metrics import (
-    accuracy_score, precision_recall_fscore_support,
-    confusion_matrix, mean_absolute_error
-)
+from sklearn.metrics import confusion_matrix
 
 
-def prepare(config, X_train, y_train) -> tuple:
-    """
-    Prepare the model, head, dataset, dataloader, optimizer, and loss function.
-    """
+def prepare(config, X_train, y_train):
     encoder_type = config["encoder_type"]
     type = config["task_type"]
 
@@ -40,7 +34,7 @@ def prepare(config, X_train, y_train) -> tuple:
         head = nn.Sequential(
             nn.LayerNorm(d_model),
             nn.Dropout(0.2),
-            nn.Linear(d_model, 11),
+            nn.Linear(d_model, 10),
         )
     elif type == "anomaly duration":
         head = nn.Sequential(
@@ -74,86 +68,35 @@ def prepare(config, X_train, y_train) -> tuple:
     return model, head, train_dataset, train_dataloader, optimizer, criterion
 
 
-def _prevalence_weights(y_true, p_target=0.05, pos_label=1, eps=1e-6) -> np.ndarray:
-    """
-    Reweight samples so eval reflects a target prevalence (e.g., 5% anomalies)
-    """
-    p_curr = float((y_true == pos_label).mean())
-    p_curr = min(max(p_curr, eps), 1 - eps)
-    w_pos = p_target / p_curr
-    w_neg = (1 - p_target) / (1 - p_curr)
-    return np.where(y_true == pos_label, w_pos, w_neg)
+def evaluate(model, head, dataset, gt, type, batch_size=64):
+    """Run inference in fixed-size batches and aggregate predictions.
 
-
-def evaluate(model, head, dataset, task: str) -> dict:
+    Batching is important for foundation-style encoders (Chronos / Toto / Mantis)
+    that allocate large per-channel intermediate tensors; running the whole
+    dataset in a single forward pass would OOM on CPU.
     """
-    task ∈ {'anomaly detection', 'root-cause analysis', 'anomaly duration', 'forecasting'}
-    """
-    model.eval(); head.eval()
-    X, y = dataset.tensors
-
+    model.eval()
+    head.eval()
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+    logits_chunks = []
     with torch.no_grad():
-        Xs = X.permute(0, 2, 1).float()
-        out = model(Xs)
-        logits = head(out)
+        for xb, _ in loader:
+            xb = xb.permute(0, 2, 1)
+            logits_chunks.append(head(model(xb)).cpu().numpy())
+    logits = np.concatenate(logits_chunks, axis=0)
 
-    metrics = {}
+    if type == "anomaly duration":
+        train_accuracy = (np.round(logits) == gt).mean()
+        print(f"Accuracy: {train_accuracy * 100:.2f}%")
+    elif type == "forecasting":
+        train_mae = np.mean(np.abs(logits - gt))
+        train_RMSE = np.sqrt(((logits - gt) ** 2).mean())  # RMSE
+        print(f"MAE: {train_mae:.4f}")
+        print(f"RMSE: {train_RMSE:.4f}")
+    else:
+        y_pred = np.argmax(logits, axis=1)
+        train_accuracy = (y_pred == gt).mean()
+        print(f"Accuracy: {train_accuracy * 100:.2f}%")
 
-    if task == 'forecasting':
-        y_true = y.cpu().numpy()
-        y_pred = logits.cpu().numpy()
-        mae = mean_absolute_error(y_true, y_pred)
-        rmse = float(np.sqrt(np.mean((y_pred - y_true) ** 2)))
-        metrics.update({'mae': mae, 'rmse': rmse})
-        return metrics
-
-    if task == 'anomaly duration':
-        y_pred = np.round(logits).cpu().numpy().astype(np.int64)
-        y_true = y.cpu().numpy().astype(np.int64)
-
-        y_true_flat = y_true.reshape(-1)
-        y_pred_flat = y_pred.reshape(-1)
-
-        acc = accuracy_score(y_true_flat, y_pred_flat)
-        prec, rec, f1, _ = precision_recall_fscore_support(
-            y_true_flat, y_pred_flat, average='binary', pos_label=1, zero_division=0
-        )
-        metrics.update({'accuracy': acc, 'precision_anom': prec, 'recall_anom': rec, 'f1_anom': f1})
-        return metrics
-
-    # Classification (binary or multi-class)
-    y_true = y.cpu().numpy().astype(np.int64)
-    y_logits = logits.cpu().numpy()
-    y_pred = y_logits.argmax(axis=1)
-
-    # --- plain (unweighted) summary ---
-    acc = accuracy_score(y_true, y_pred)
-    cm  = confusion_matrix(y_true, y_pred, labels=np.unique(y_true))
-    prec_m, rec_m, f1_m, _ = precision_recall_fscore_support(
-        y_true, y_pred, average='macro', zero_division=0
-    )
-
-    metrics.update({
-        'accuracy': acc,
-        'macro_precision': prec_m,
-        'macro_recall': rec_m,
-        'macro_f1': f1_m,
-        'confusion_matrix': cm,
-    })
-
-    # --- prevalence-adjusted (only for anomaly detection) ---
-    if task == 'anomaly detection':
-        sw = _prevalence_weights(y_true, p_target=0.05, pos_label=1)
-        prec_adj, rec_adj, f1_adj, _ = precision_recall_fscore_support(
-            y_true, y_pred, average='binary', pos_label=1, sample_weight=sw, zero_division=0
-        )
-        cm_adj = confusion_matrix(y_true, y_pred, labels=[0, 1], sample_weight=sw)
-
-        metrics.update({
-            'anomaly_precision_prevalence_adjusted': prec_adj,
-            'anomaly_recall_prevalence_adjusted':    rec_adj,
-            'anomaly_f1_prevalence_adjusted':        f1_adj,
-            'confusion_matrix_prevalence_adjusted':  cm_adj,
-        })
-
-    return metrics
+        cm = confusion_matrix(gt, y_pred, labels=np.unique(gt))
+        print("Confusion matrix (rows=true, cols=pred):\n", cm)

@@ -1,9 +1,8 @@
 task_type: 'anomaly detection' # 'anomaly detection' | 'root-cause analysis' | 'anomaly duration' | 'forecasting'
 
-encoder_type: 'TimesNet'       # 'TimesNet' | 'Autoformer' | 'NonStationary_Transformer' | 'FEDformer' | 'Informer'
+encoder_type: 'TimesNet'       # 'TimesNet' | 'Autoformer' | 'NonStationary_Transformer' | 'FEDformer' | 'Informer' | 'Chronos' | 'Toto' | 'Mantis'
 
 seed: 42
-split_ratio: 0.2               # test/train split ratio
 
 train:
   batch_size: 32
@@ -21,7 +20,7 @@ TimesNet_model:
   d_model: 32
   d_ff: 64
   num_kernels: 4
-  embed: "fixed"           # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+  embed: "fixed"
   freq: "0.1s"
   dropout: 0.3
   e_layers: 2
@@ -34,13 +33,13 @@ Informer_model:
     dropout:    0.3
     factor:     1
     activation: "gelu"
-    seq_len:    128       # T
-    label_len:  0         # not used for recon
-    pred_len:   0         # recon only
-    enc_in:     18        # C (input channels)
-    dec_in:     18        # for decoder embedding
-    c_out:      18        # must match enc_in for recon
-    embed:      "fixed"   # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    seq_len:    128    # T
+    label_len:  0      # not used for recon
+    pred_len:   0      # recon only
+    enc_in:     18     # C (input channels)
+    dec_in:     18     # for decoder embedding
+    c_out:      18     # must match enc_in for recon
+    embed:      "fixed"
     freq:       "h"
     moving_avg: 25
 
@@ -51,19 +50,19 @@ FEDformer_model:
     d_ff: 64
     dropout: 0.3
     activation: 'gelu'
-    embed: 'timeF'         # uses calendar/time-of-day features; set `freq` appropriately. Alternatives: "learned", "timeF"
+    embed: 'timeF'
     freq: 's'
     seq_len: 128
     label_len: 0
-    pred_len: 0      
-    enc_in: 18             # input channels C
-    dec_in: 18             # unused here
-    c_out: 18              # must equal enc_in for reconstruction
-    version: 'fourier'     # 'fourier' or 'wavelets'
+    pred_len: 0
+    enc_in: 18          # input channels C
+    dec_in: 18          # unused here
+    c_out: 18           # must equal enc_in for reconstruction
+    version: 'fourier'  # 'fourier' or 'wavelets'
     mode_select: 'random'  # 'random' or 'low'
-    modes: 32              # number of modes to select
+    modes: 32           # number of modes to select
     moving_avg: 25
-    
+
 Autoformer_model:
     d_model:    32
     n_heads:    8
@@ -72,12 +71,12 @@ Autoformer_model:
     dropout:    0.3
     factor:     1
     activation: "gelu"
-    seq_len:    128       # T
+    seq_len:    128   # T
     pred_len:   0
     label_len:  0
-    enc_in:     18        # C (input channels)
-    c_out:      18        # must match enc_in for recon
-    embed:      "fixed"   # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    enc_in:     18    # C (input channels)
+    c_out:      18    # must match enc_in for recon
+    embed:      "fixed"
     freq:       "s"
     moving_avg: 25
 
@@ -89,12 +88,52 @@ NonStationary_Transformer_model:
     dropout:   0.3
     factor:    1
     activation: "gelu"
-    seq_len:   128        # T
-    label_len: 0          # not used here
-    pred_len:  0          # pure reconstruction; keep 0
-    enc_in:    18         # C_in == c_out for reconstruction
+    seq_len:   128    # T
+    label_len: 0      # not used here
+    pred_len:  0      # pure reconstruction; keep 0
+    enc_in:    18     # C_in == c_out for reconstruction
     c_out:     18
-    embed:     "fixed"    # sinusoidal positions (no learnable params). Alternatives: "learned", "timeF"
+    embed:     "fixed"
     freq:      "h"
     p_hidden_dims:   [128, 128]
     p_hidden_layers: 2
+
+Chronos_model:
+    # Chronos-style tokenizer + T5 encoder, randomly initialized (end-to-end trainable).
+    # Reuses the MeanScaleUniformBins tokenizer from amazon/chronos-t5-tiny.
+    seq_len:   128
+    enc_in:    18
+    d_model:   64
+    d_kv:      16
+    d_ff:      128
+    n_heads:   4
+    e_layers:  2
+    dropout:   0.3
+
+Toto_model:
+    # Datadog Toto backbone, randomly initialized (end-to-end trainable).
+    seq_len:                   128
+    enc_in:                    18
+    d_model:                   64
+    embed_dim:                 64       # internal Toto patch-embedding dim
+    patch_size:                8
+    stride:                    8
+    e_layers:                  4        # number of transformer layers
+    n_heads:                   4
+    d_ff:                      128      # mlp_hidden_dim inside the transformer
+    dropout:                   0.1
+    spacewise_every_n_layers:  2
+    k_components:              4        # mixture components of the output distribution
+
+Mantis_model:
+    # Mantis-V1 backbone (per-channel), randomly initialized (end-to-end trainable).
+    seq_len:           128
+    enc_in:            18
+    d_model:           64
+    hidden_dim:        64
+    num_patches:       8        # seq_len must be a multiple of num_patches
+    e_layers:          4        # transf_depth
+    n_heads:           4        # transf_num_heads
+    d_ff:              128      # transf_mlp_dim
+    transf_dim_head:   32
+    dropout:           0.1

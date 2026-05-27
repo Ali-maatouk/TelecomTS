@@ -12,24 +12,25 @@ with open("configs/config.yaml", "r") as f:
 
 task_type = config["task_type"]
 
-seed = config["seed"]
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
+random.seed(config["seed"])
+np.random.seed(config["seed"])
+torch.manual_seed(config["seed"])
 
-data = load_dataset(
+## Load TelecomTS from the Hugging Face Hub and produce an 80/20 train/test split
+
+dataset = load_dataset(
     "AliMaatouk/TelecomTS",
-    data_files={"full": "**/chunked.jsonl"}
-)
+    data_files={"full": "**/chunked.jsonl"},
+)["full"]
 
-splits = data["full"].train_test_split(test_size=config["split_ratio"], shuffle=True)
-train_data = splits["train"]
-test_data = splits["test"] 
+splits = dataset.train_test_split(test_size=0.2, seed=config["seed"])
+data = list(splits["train"])
+test_data = list(splits["test"])
 
-# ======== Train ========
+random.shuffle(data)
 
 seq_len = config[f"{config['encoder_type']}_model"]["seq_len"]
-X_train, y_train = preprocess(train_data, task_type, seq_len)
+X_train, y_train = preprocess(data, task_type, seq_len)
 
 model, head, train_dataset, train_dataloader, optimizer, criterion = prepare(
     config, X_train, y_train
@@ -56,15 +57,9 @@ for epoch in range(config["train"]["epochs"]):
         f"Epoch {epoch+1}/{config['train']['epochs']}, Loss: {np.mean(train_losses):.4f}"
     )
 
-train_metrics = evaluate(model, head, train_dataset, task_type)
-for k, v in train_metrics.items():
-    if isinstance(v, (int, float)):
-        tqdm.write(f"Train {k}: {v:.4f}")
-    else:
-        v = [np.round(x, 4).tolist() for x in v.tolist()]
-        tqdm.write(f"Train {k}:\n{v}")
+evaluate(model, head, train_dataset, y_train, task_type)
 
-# ======== Evaluate ========
+## Evaluate
 
 tqdm.write("Evaluating...")
 
@@ -73,10 +68,4 @@ X_test, y_test = preprocess(test_data, task_type, seq_len)
 test_dataset = torch.utils.data.TensorDataset(
     torch.tensor(X_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.int64)
 )
-test_metrics = evaluate(model, head, test_dataset, task_type)
-for k, v in test_metrics.items():
-    if isinstance(v, (int, float)):
-        tqdm.write(f"Test {k}: {v:.4f}")
-    else:
-        v = [np.round(x, 4).tolist() for x in v.tolist()]
-        tqdm.write(f"Test {k}:\n{v}")
+evaluate(model, head, test_dataset, y_test, task_type)
