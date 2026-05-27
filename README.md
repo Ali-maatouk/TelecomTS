@@ -81,9 +81,9 @@ Each sample in TelecomTS contains:
 |                          | Channel types                | 10 float, 6 integer, 2 categorical         |
 | **Anomalies**            | Anomaly types                | 11                                         |
 | **Q&A Categories**       | Time Series Q&A categories   | 64                                         |
-|                          | Network-Level Q&A categories | 5                                          |
+|                          | Network-Level Q&A categories | 4                                          |
 |                          | Anomalies Q&A categories     | 3                                          |
-| **Total QA Size**        | Total QA instances           | **2,210,216**                              |
+| **Total QA Size**        | Total QA instances           | **2,210,185**                              |
 
 
 
