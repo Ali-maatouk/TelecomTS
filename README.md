@@ -1,8 +1,9 @@
-<p align="center">
+
+
+<p align="center"> 
   <img src="img/framework.png" alt="TelecomTS overview: curation pipeline, covariates, and supported tasks." width="950"/>
 </p>
 
-<h1 align="center">TelecomTS: A Multi-Modal Observability Dataset for Time Series and Language Analysis</h1>
 
 <p align="center">
   <a href="https://icml.cc/Conferences/2026"><img alt="ICML 2026" src="https://img.shields.io/badge/ICML-2026-blue.svg"></a>
@@ -12,17 +13,14 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green.svg">
 </p>
 
-<p align="center">
-  <b>Austin Feng*, Andreas Varvarigos*, Ioannis Panitsas, Daniela Fernandez, Jinbiao Wei,<br>
-  Yuwei Guo, Jialin Chen, Ali Maatouk, Leandros Tassiulas, Rex Ying</b><br>
-  <i>Yale University</i> &nbsp;·&nbsp; *Equal contribution
-</p>
 
----
+# TelecomTS: A Multi-Modal Telecom Dataset
 
 ## Overview
 
-**TelecomTS** is a large-scale, high-resolution, multi-modal dataset derived from a **5G telecommunications testbed**. It is the first public observability dataset to preserve **de-anonymized** observability metrics with **absolute scale information**, encompassing by design a broad suite of multi-modal downstream tasks beyond forecasting:
+
+
+**TelecomTS** is a large-scale, high-resolution, multi-modal dataset derived from a **5G telecommunications testbed**. It is the first public observability dataset to preserve **de-anonymized** observability metrics with **absolute scale information**, encompassing by design a broad suite of multi-modal downstream tasks:
 
 - 🔎 **Anomaly detection** (binary)
 - 🛠️ **Root-cause analysis** (multi-class)
@@ -44,11 +42,34 @@ Observability data, particularly in telecommunications, differs fundamentally fr
 - **Multi-modal inputs**:
   - Time series KPIs across PHY, MAC, and network layers, sampled at **10 Hz** (100 ms)
   - Natural-language network descriptions and Q&A pairs
-- **Heterogeneous covariates**: numeric KPIs and categorical fields (e.g., `UL_Protocol`, `DL_Protocol`)
+- **Heterogeneous covariates**: numeric KPIs and categorical fields (e.g., UL_Protocol, DL_Protocol)
 - **Absolute scale preserved** (no normalization, no anonymization)
-- **Real and synthetic anomalies**: **11 anomaly types** — 10 synthetic types grounded in telecom literature plus one real anomaly (jamming) collected over the air
-- **Reasoning traces**: explicit, scored chain-of-thought traces for reasoning-aware fine-tuning and RL
+- **Real and synthetic anomalies**: 10 synthetic types grounded in telecom literature plus one real anomaly (jamming) collected over the air
+- **Reasoning traces**: chain-of-thought traces for reasoning-aware fine-tuning and RL
 - **Labels / metadata**: zone, application, mobility, congestion state, anomaly presence
+
+### Sample Structure
+
+Each sample in TelecomTS contains:
+
+- **start_time / end_time** — temporal boundaries of the chunk
+- **sampling_rate_hz** — number of timesteps per second 
+- **description** — natural-language summary of the network environment and time series behaviors
+- **KPIs** — key performance indicator names and values
+- **anomalies** — existence, type, duration, affected KPIs, and troubleshooting tickets
+- **statistics** — mean, variance, trend, and periodicity for each KPI
+- **labels** — contextual metadata (zone, application, mobility, congestion, anomaly presence)
+- **QnA** — natural-language Q&A over the sample, grouped into `timeseries`, `network`, and `anomalies` subcategories. Each entry of has the following structure:
+
+  ```json
+  { "q": "What activity was the user engaged in?",
+    "a": "Twitch",
+    "reasoning": "Sustained downlink throughput in the 2–4 Mbps range with periodic UDP bursts and stable RSRP is consistent with live video streaming..." }
+  ```
+
+  The `reasoning` field, present in the last two subcategories, contains an explicit reasoning trace that reveals the intermediate decision-making steps used to derive the final answer. 
+  
+
 
 ### Statistics
 
@@ -64,28 +85,9 @@ Observability data, particularly in telecommunications, differs fundamentally fr
 |                          | Anomalies Q&A categories     | 3                                          |
 | **Total QA Size**        | Total QA instances           | **2,210,216**                              |
 
-### Sample Structure
 
-Each sample in TelecomTS contains:
 
-- **`start_time` / `end_time`** — temporal boundaries of the chunk
-- **`sampling_rate_hz`** — number of timesteps per second (10 Hz)
-- **`description`** — natural-language summary of the network environment and time series behaviors
-- **`KPIs`** — key performance indicator names and values across PHY, MAC, and network layers
-- **`anomalies`** — existence, type, duration, affected KPIs, and troubleshooting tickets
-- **`statistics`** — mean, variance, trend, and periodicity for each KPI
-- **`labels`** — contextual metadata (zone, application, mobility, congestion, anomaly presence)
-- **`QnA`** — natural-language Q&A over the sample, grouped into `network`, `timeseries`, and `anomalies` subcategories. Each entry has the schema:
-
-  ```json
-  { "q": "What activity was the user engaged in?",
-    "a": "Twitch",
-    "reasoning": "Sustained downlink throughput in the 2–4 Mbps range with periodic UDP bursts and stable RSRP is consistent with live video streaming rather than file download or buffered video..." }
-  ```
-
-  The `reasoning` field carries an **explicit reasoning trace** that exposes the intermediate decision steps used to derive the answer, and is intended for reasoning-aware supervised fine-tuning, preference learning, and reinforcement learning from verifiable rewards. It is provided for **`network` and `anomalies` Q&A entries**; `timeseries` Q&A is a direct statistical extraction over a single channel and does not require multi-step reasoning, so those entries contain only `q` and `a`.
-
-### Accessing the Dataset
+### Loading the Dataset
 
 TelecomTS is hosted on the Hugging Face Hub at [`AliMaatouk/TelecomTS`](https://huggingface.co/datasets/AliMaatouk/TelecomTS). You can load it directly with the 🤗 `datasets` library:
 
@@ -97,8 +99,7 @@ dataset = load_dataset(
     data_files={"full": "**/chunked.jsonl"},
 )["full"]
 
-print(dataset)             # 32,000 samples
-print(dataset[0].keys())   # KPIs, anomalies, statistics, labels, QnA, ...
+print(dataset)            
 ```
 
 The benchmarking pipeline in this repo fetches the data automatically — no manual download is required.
@@ -109,7 +110,7 @@ The benchmarking pipeline in this repo fetches the data automatically — no man
 
 ```bash
 # 1) Clone
-git clone https://github.com/varvarigos/TelecomTS_Benchmark.git
+git clone https://github.com/Ali-maatouk/TelecomTS.git
 cd TelecomTS_Benchmark
 
 # 2) Create & activate a virtual environment
@@ -146,28 +147,19 @@ Choose the **model** and the **task** in [`configs/config.yaml`](configs/config.
   - `NonStationary_Transformer`
   - `FEDformer`
   - `Informer`
-  - `Chronos`
-  - `Toto`
-  - `Mantis`
-
-> **Note** — For `forecasting`, the preprocessing in [`src/utils/data_utils.py`](src/utils/data_utils.py) builds sliding windows and enforces `assert T > window_size`, where `T = 128` (sample length) and `window_size` is the chosen encoder's `seq_len` in [`configs/config.yaml`](configs/config.yaml). Set that encoder's `seq_len` to a value **strictly less than 128** (e.g. `64` or `16`), keeping `Mantis`'s `seq_len` a multiple of `num_patches` and `Toto`'s `seq_len` a multiple of `patch_size`/`stride`.
 
 ## Citation
 
-If you use TelecomTS in your work, please cite:
+You can find the paper with all details at https://arxiv.org/abs/2510.06063. Please cite it as follows:
 
 ```bibtex
-@misc{feng2026telecomtsmultimodalobservabilitydataset,
-      title={TelecomTS: A Multi-Modal Observability Dataset for Time Series and Language Analysis}, 
+@misc{feng2025telecomtsmultimodalobservabilitydataset,
+      title={TelecomTS: A Multi-Modal Observability Dataset for Time Series and Language Analysis},
       author={Austin Feng and Andreas Varvarigos and Ioannis Panitsas and Daniela Fernandez and Jinbiao Wei and Yuwei Guo and Jialin Chen and Ali Maatouk and Leandros Tassiulas and Rex Ying},
-      year={2026},
+      year={2025},
       eprint={2510.06063},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2510.06063}, 
+      url={https://arxiv.org/abs/2510.06063},
 }
 ```
-
-## License
-
-This repository is released under the MIT License. See [`LICENSE`](LICENSE) for details.
